@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: hohoho-db-dev
+    environment:
+      POSTGRES_DB: appdb
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: changeme
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data-dev:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  backend:
+    build:
+      context: ./backend
+      target: build  # Utiliser le stage de build pour le dev
+    container_name: hohoho-backend-dev
+    ports:
+      - "8080:8080"
+      - "5005:5005"  # Port de debug Java
+    environment:
+      - DATABASE_URL=jdbc:postgresql://db:5432/appdb
+      - DATABASE_USERNAME=appuser
+      - DATABASE_PASSWORD=changeme
+      - JWT_SECRET=dev-secret-key
+      - CORS_ORIGINS=http://localhost:4200
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+    volumes:
+      - ./backend:/app
+      - maven-cache:/root/.m2
+    depends_on:
+      - db
+    networks:
+      - app-network
+    command: mvn spring-boot:run
+
+  frontend:
+    image: node:20-alpine
+    container_name: hohoho-frontend-dev
+    working_dir: /app
+    ports:
+      - "4200:4200"
+    environment:
+      - API_URL=http://localhost:8080/api
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - app-network
+    command: sh -c "npm install && npm start -- --host 0.0.0.0"
+
+volumes:
+  db-data-dev:
+  maven-cache:
+
+networks:
+  app-network:
+    driver: bridge
